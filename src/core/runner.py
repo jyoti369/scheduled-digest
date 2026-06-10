@@ -14,21 +14,24 @@ from pathlib import Path
 IST = timezone(timedelta(hours=5, minutes=30))
 
 ROOT = Path(__file__).resolve().parent
-SEEN_FILE = ROOT / "seen.json"
+SEEN_FILE = ROOT / "state.json"
 
+# all source-specific config comes from the environment (set as repo secrets)
+BASE = os.environ.get("SOURCE_BASE", "").rstrip("/")
 SOURCE_ID = "69d4ca8b43d279df726b8c5c"
+REWARD_FIELD = os.environ.get("REWARD_FIELD", "")
 SOURCE_URL = (
-    f"https://app.respondent.io/next/v4/participant/matching/projects/"
+    f"{BASE}/next/v4/participant/matching/projects/"
     f"search/profiles/{SOURCE_ID}?page=1&pageSize=50&sort=publishedAt&showEligible=true"
 )
-REF_URL = "https://app.respondent.io/next/participants/projects?sort=publishedAt&eligible=true"
+REF_URL = f"{BASE}/next/participants/projects?sort=publishedAt&eligible=true"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
 
-# Transient failures (timeout / 5xx) self-recover: seen.json is only advanced on a
+# Transient failures (timeout / 5xx) self-recover: state.json is only advanced on a
 # successful poll, so a missed poll delays detection, it never drops an entry. So we
 # stay quiet for a couple of misses, then raise ONE alarm if it really looks down,
 # and re-remind occasionally while it stays down (so a long outage isn't one
-# missable email). Counters live in seen.json because the runner is ephemeral.
+# missable email). Counters live in state.json because the runner is ephemeral.
 FAIL_ALERT_THRESHOLD = 3
 FAIL_REALERT_EVERY = 12
 
@@ -38,9 +41,9 @@ def log(msg):
 
 
 def get_cookies():
-    raw = os.environ.get("RESPONDENT_COOKIES", "").strip()
+    raw = os.environ.get("AUTH_COOKIES", "").strip()
     if not raw:
-        msg = "Scheduled digest (GH Actions): RESPONDENT_COOKIES secret is missing or empty. Set it via `gh secret set RESPONDENT_COOKIES`."
+        msg = "Scheduled digest (GH Actions): AUTH_COOKIES secret is missing or empty. Set it via `gh secret set AUTH_COOKIES`."
         log(msg)
         send_email("Scheduled digest: secret missing", msg)
         sys.exit(1)
@@ -95,12 +98,12 @@ def fetch_items(cookies, attempts=3):
 def item_url(p):
     pid = p.get("id", "")
     slug = re.sub(r"[^a-z0-9-]+", "-", (p.get("name") or "").lower()).strip("-")[:80]
-    return f"https://app.respondent.io/next/participants/projects/{pid}/{slug}" if pid else REF_URL
+    return f"{BASE}/next/participants/projects/{pid}/{slug}" if pid else REF_URL
 
 
 def summarize(p):
     name = p.get("name", "(untitled)")
-    reward = p.get("respondentRemuneration", "?")
+    reward = p.get(REWARD_FIELD, "?")
     minutes = p.get("timeMinutesRequired", "?")
     return f"${reward} / {minutes}min - {name}"
 
@@ -148,8 +151,8 @@ SEEN_CAP = 5000
 
 
 def save_seen(ids, first_run=False, fails=0, auth_alerted=False):
-    # Keep newest IDs only. Mongo ObjectIDs sort lexicographically by timestamp,
-    # so sorted desc puts recent ones first; take top SEEN_CAP.
+    # Keep newest IDs only. ObjectIDs sort lexicographically by timestamp, so sorted
+    # desc puts recent ones first; take top SEEN_CAP.
     capped = sorted(set(ids), reverse=True)[:SEEN_CAP]
     SEEN_FILE.write_text(
         json.dumps(
@@ -179,7 +182,7 @@ def note_transient_failure(status, body):
         send_email(
             "Scheduled digest: looks down",
             f"{fails} consecutive failed polls; the job may be down. Check the "
-            f"RESPONDENT_COOKIES secret and the GitHub Actions runs (the source may also "
+            f"AUTH_COOKIES secret and the GitHub Actions runs (the source may also "
             f"be blocking the runner). Last error: status={status}, {str(body)[:200]}",
         )
     sys.exit(0)
@@ -194,7 +197,7 @@ def main():
         # aren't pinged every run until the cookie is refreshed. Exit 0 to keep CI
         # quiet; the email is the signal. auth_alerted resets on the next good poll.
         seen = load_seen()
-        msg = "Scheduled digest (GH Actions): auth expired. Update the RESPONDENT_COOKIES secret."
+        msg = "Scheduled digest (GH Actions): auth expired. Update the AUTH_COOKIES secret."
         log(msg)
         if not seen.get("auth_alerted", False):
             send_email("Scheduled digest: auth expired", msg)

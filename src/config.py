@@ -1,0 +1,7 @@
+"""Default runtime settings."""
+
+REQUEST_TIMEOUT = 30
+RETRY_ATTEMPTS = 3
+RETRY_BACKOFFS = [2, 5, 10]
+PAGE_SIZE = 50
+STATE_CAP = 5000

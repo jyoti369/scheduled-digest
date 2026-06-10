@@ -1,4 +1,4 @@
-name: Scheduled Digest
+name: CI
 
 on:
   schedule:
@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: poll
+  group: ci
   cancel-in-progress: false
 
 jobs:
-  poll:
+  run:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -21,22 +21,24 @@ jobs:
       - name: Random delay (light jitter)
         run: sleep $((RANDOM % 60))
 
-      - name: Run poll
+      - name: Run
         env:
-          RESPONDENT_COOKIES: ${{ secrets.RESPONDENT_COOKIES }}
+          AUTH_COOKIES: ${{ secrets.AUTH_COOKIES }}
+          SOURCE_BASE: ${{ secrets.SOURCE_BASE }}
+          REWARD_FIELD: ${{ secrets.REWARD_FIELD }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
-        run: python3 poll.py
+        run: python3 src/core/runner.py
 
       - name: Commit state if changed
         if: always()
         run: |
-          if [[ -n "$(git status --porcelain seen.json)" ]]; then
+          if [[ -n "$(git status --porcelain src/core/state.json)" ]]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add seen.json
-            git commit -m "update seen state"
+            git add src/core/state.json
+            git commit -m "update state"
             # another run may have pushed in the meantime; rebase + retry so a
             # push race never fails the job
             for i in 1 2 3; do

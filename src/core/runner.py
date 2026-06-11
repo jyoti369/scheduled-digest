@@ -138,6 +138,31 @@ def send_email(subject, body):
         log(f"email failed: {e}")
 
 
+def send_push(title, body, priority="max", tags="loudspeaker"):
+    # Push to ntfy.sh so a new item actually rings (email is silent). The topic is a
+    # secret because ntfy topic URLs are public; a random topic keeps it private.
+    # priority=max + a default alert tone rings through silent/DND on the phone app.
+    topic = os.environ.get("NTFY_TOPIC", "").strip()
+    if not topic:
+        return
+    req = urllib.request.Request(
+        f"https://ntfy.sh/{topic}",
+        data=body.encode("utf-8"),
+        method="POST",
+        headers={
+            "Title": title.encode("ascii", "replace").decode("ascii"),
+            "Priority": priority,
+            "Tags": tags,
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            r.read()
+        log("push sent to ntfy topic")
+    except Exception as e:
+        log(f"push failed: {e}")
+
+
 def load_seen():
     if not SEEN_FILE.exists():
         return {"first_run": True, "ids": []}
@@ -249,6 +274,7 @@ def main():
             f"[Feed] {s}",
             f"{s}\n\n{p.get('description', '')[:500]}\n\nView: {url}\nPublished: {format_ist(p.get('publishedAt'))}",
         )
+        send_push(f"[Feed] {s}", f"{s}\n\n{url}")
 
     save_seen(seen_ids | set(current.keys()), first_run=False)
 

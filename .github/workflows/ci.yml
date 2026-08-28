@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '*/3 * * * *'
   workflow_dispatch:
+    inputs:
+      selftest:
+        description: 'send a test mail to check credentials'
+        type: boolean
+        default: false
 
 concurrency:
   group: ci
@@ -20,6 +25,26 @@ jobs:
 
       - name: Random delay (light jitter)
         run: sleep $((RANDOM % 60))
+
+      - name: Mail credential check
+        if: inputs.selftest
+        env:
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+        run: |
+          python3 - <<'EOF'
+          import os, smtplib
+          from email.mime.text import MIMEText
+          m = MIMEText("credential check, nothing to see here")
+          m["Subject"] = "Scheduled digest: credential check"
+          m["From"] = os.environ["EMAIL_FROM"]
+          m["To"] = os.environ["EMAIL_TO"]
+          with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as s:
+              s.login(os.environ["EMAIL_FROM"], os.environ["EMAIL_APP_PASSWORD"])
+              s.send_message(m)
+          print("mail went out fine")
+          EOF
 
       - name: Run
         env:

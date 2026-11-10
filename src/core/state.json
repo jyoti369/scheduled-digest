@@ -1,7 +1,7 @@
 {
   "first_run": false,
   "fails": 0,
-  "auth_alerted": true,
+  "auth_alerted": false,
   "ids": [
     "68f7e16589ae619a7ab6ebea",
     "69f0ff8e6ec37fd2bb4507f5",
@@ -910,6 +910,8 @@
     "6aeed06d147b2c07f7295813",
     "6aef32ddec48ed978089042e",
     "6aef40ec19a08b17c68d35a5",
-    "6aefb16d8d78bbc9e0f4c1a3"
+    "6aefb16d8d78bbc9e0f4c1a3",
+    "6af0997b0519eddbdb96f786",
+    "6af1f45f085de770978a27eb"
   ]
 }
